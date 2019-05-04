@@ -1,0 +1,107 @@
+from sys import platform
+
+import os
+import json
+import re
+
+# Bookmark: Method definitions
+
+def parseJson():
+    conan = ""
+    vscode = ""
+    # This is a two-part method. First load the conan ycm flags. This gets us the include paths and names
+    with open("build/conan_ycm_flags.json", "r") as f:
+        # Read the content
+        content = "".join(f.readlines())
+        # And parse it. List comprehension removes the -i part and gives a plain path. Not sure whether the system part is standard/universal
+        # or not, hence the optional part. 
+        conan = [re.sub("(?i)-I(?:system)?", "", x) for x in json.loads(content)["includes"]]
+    # Next, the config is needed. In order to keep the includes linked in the file as well, they need to be added.
+    # While it can be done manually, this script also does it. 
+    with open(".vscode/c_cpp_properties.json", "r") as f:
+        vscode = "".join(f.readlines())
+        
+    return (conan, vscode)
+
+def handleIncludeInConfigFile(vsCodeConfig, include):
+    # Iterate through the config. There can be several configurations per project, hence the iterating
+    for configuration in vsCodeConfig["configurations"]:
+        # Find the includePath definition
+        vsIncludes = configuration["includePath"];
+        # Flag because loop labels aren't supported
+        match = False;
+        for vsInclude in vsIncludes:
+            # Attempt to find a path
+            if ("vsInclude/" + include in vsInclude):
+                match = True;
+                break;
+                
+        if not match:
+            vsIncludes.append("${workspaceFolder}/vsInclude/" + include)
+        
+# Bookmark: Script
+if not os.path.exists(".vscode"):
+    raise Exception("Failed to find the .vscode folder")
+
+# Grab the includes
+print("Grabbing dependencies and current configuration...")
+(includes, rawVsCodeConfig) = parseJson()
+
+if(includes is None or len(includes) == 0):
+    raise Exception("Failed to read data, or data is empty. Make sure build/conan_ycm_flags.json exists and has content")
+if(rawVsCodeConfig is None or len(rawVsCodeConfig) == 0):
+    raise Exception("VS Code config file is empty. While this script can handle some issues for you, " +
+        " You still have to have a minimal file. VS Code can also auto-generate the file.")
+
+vsCodeConfig = json.loads(rawVsCodeConfig)
+
+# Create the directory
+if not os.path.exists("vsInclude"):
+    os.mkdir("vsInclude")
+
+for include in includes:
+    # Once we're in the conan directory, the structure is global: 
+    # <path>/.conan/data/packageName/packageVersion/authorName/releaseMode (i.e. stable, no parenthesis or space)/package/hash/
+    # where <path> leads to the conan folder. authorName is the part right after the @ in the conanfile, and before the first slash.
+    # In:
+    # cpr/1.3.0@DEGoodmanWilson/stable
+    # That would make the authorName DEGoodmanWilson. 
+    # This doesn't matter for the current use case. What the regex finds is the package name, which is right after the data. 
+    match = re.search(r"data[\\/]+(.*?)[\\/]+", include)
+    # No match? Can't have that
+    if (match is None):
+        raise Exception("Failed to read name from \"" + include + "\"")
+    # Grab the group
+    name = match.group(1)
+    if(name is None or name.replace(" ", "") == ""):
+        raise Exception("Name is empty for \"" + include + "\"")
+    print("Found dependency: " + name)
+    handleIncludeInConfigFile(vsCodeConfig, name)
+    if os.path.exists("vsInclude/" + name):
+        print("Already linked. Skipping linking...")
+        continue
+    if platform == "win32":
+        # Windows and symlinks from Python don't work out. https://github.com/fishtown-analytics/dbt/issues/766#issuecomment-388213984
+        # One hack to get around this is os.system. 
+        os.system("mklink /D \"vsInclude/" + name + "\" \"" + include + "\"")
+
+    else:
+        # Any other OS is (in theory) fine
+        os.symlink(include, "vsInclude/" + name)
+    
+print("All config ready. ")
+# Dump the updates
+vsCodeConfigStr = json.dumps(vsCodeConfig, indent=4)
+if (vsCodeConfigStr == rawVsCodeConfig):
+    # If no changes are made, save the disk and time. No need to write it. This is especially important for bigger files. 
+    print("No updates made to the VS config: All items present.")
+else:
+    if (len(vsCodeConfigStr) == 0):
+        raise Exception("ABORT EMPTY WRITE!")
+    else:
+        print("Saving config...")
+        # Otherwise, open and write the changes.
+        with open(".vscode/c_cpp_properties.json", "w") as f:
+            f.write(vsCodeConfigStr)
+        print("Successfully saved the update configuration.")
+        print("############################################")
