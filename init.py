@@ -3,6 +3,7 @@ from sys import platform
 import os
 import json
 import re
+import subprocess
 
 # Bookmark: Method definitions
 
@@ -13,8 +14,7 @@ def parseJson():
     with open("build/conan_ycm_flags.json", "r") as f:
         # Read the content
         content = "".join(f.readlines())
-        # And parse it. List comprehension removes the -i part and gives a plain path. Not sure whether the system part is standard/universal
-        # or not, hence the optional part. 
+        # And parse it. List comprehension removes the -i part and gives a plain path. Not sure whether the system part is optional
         conan = [re.sub("(?i)-I(?:system)?", "", x) for x in json.loads(content)["includes"]]
     # Next, the config is needed. In order to keep the includes linked in the file as well, they need to be added.
     # While it can be done manually, this script also does it. 
@@ -35,6 +35,11 @@ def handleIncludeInConfigFile(vsCodeConfig, include):
             if ("vsInclude/" + include in vsInclude):
                 match = True;
                 break;
+            elif platform == "win32":
+                # Windows is case-insensitive. 
+                if ("vsInclude/" + include.lower() in vsInclude.lower()):
+                    match = True;
+                    break;
                 
         if not match:
             vsIncludes.append("${workspaceFolder}/vsInclude/" + include)
@@ -78,18 +83,30 @@ for include in includes:
     print("Found dependency: " + name)
     handleIncludeInConfigFile(vsCodeConfig, name)
     if os.path.exists("vsInclude/" + name):
-        print("Already linked. Skipping linking...")
-        continue
+        currentLink = os.readlink("vsInclude/" + name);
+        print(currentLink)
+        print(include)
+        if (currentLink != include):
+            print("Dependency \"" + name + "\" updated. Re-linking...");
+            os.remove("vsInclude/" + name)
+        else:
+            print("Already linked. Skipping linking...")
+            continue
+    elif os.path.islink("vsInclude/" + name):
+        print("ERROR: Symbolic link exists, but the directory doesn't. Removing link...")
+        os.remove("vsInclude/" + name)
     if platform == "win32":
         # Windows and symlinks from Python don't work out. https://github.com/fishtown-analytics/dbt/issues/766#issuecomment-388213984
         # One hack to get around this is os.system. 
-        os.system("mklink /D \"vsInclude/" + name + "\" \"" + include + "\"")
-
+        result = subprocess.check_output("mklink /D \"vsInclude/" + name + "\" \"" + include + "\"", shell=True)
+        if(result.returncode != 0):
+            raise Exception("Failed to make a symbolic link for \"" + name + "\".")
     else:
         # Any other OS is (in theory) fine
         os.symlink(include, "vsInclude/" + name)
+    print("Dependency linked.\n")
     
-print("All config ready. ")
+print("All config ready.")
 # Dump the updates
 vsCodeConfigStr = json.dumps(vsCodeConfig, indent=4)
 if (vsCodeConfigStr == rawVsCodeConfig):
@@ -104,4 +121,3 @@ else:
         with open(".vscode/c_cpp_properties.json", "w") as f:
             f.write(vsCodeConfigStr)
         print("Successfully saved the update configuration.")
-        print("############################################")
