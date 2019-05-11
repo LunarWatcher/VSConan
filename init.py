@@ -99,8 +99,7 @@ for include in includes:
         # Windows and symlinks from Python don't work out. https://github.com/fishtown-analytics/dbt/issues/766#issuecomment-388213984
         # One hack to get around this is os.system. 
         result = subprocess.check_output("mklink /D \"vsInclude/" + name + "\" \"" + include + "\"", shell=True)
-        if(result.returncode != 0):
-            raise Exception("Failed to make a symbolic link for \"" + name + "\".")
+        print(result)
     else:
         # Any other OS is (in theory) fine
         os.symlink(include, "vsInclude/" + name)

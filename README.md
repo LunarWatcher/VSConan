@@ -17,6 +17,10 @@ Both of which run independently of each other.
 
 Note that `.vscode/c_cpp_configurations` **need to exist** for this script to work. Create one or generate one using VS Code's template (`C/C++: Edit Configurations` from the command palette is one way to generate it)
 
+## Integration use
+
+It's not always desired to copy-paste the script. It also makes updates harder. 
+
 # How does it work?
 
 As mentioned in the last part, it takes advantage of the `ycm` file. On my Windows 10 computer, the `ycm` generator generates something like this:
@@ -65,6 +69,3 @@ Which means once you've imported a project containing this file, and you've crea
 
 Mainly because it integrates with the workspace, and enables access to the includes as if they were a part of the project. You can still open them regardless of whether it's a symlink or not, but the browsing experience is different.
 
-# Known weaknesses
-
-As of this version, it doesn't handle updates to Conan packages. As a workaround, an update can easily be forced by removing the `vsInclude` folder, or the relevant directories for the updated package(s). 
