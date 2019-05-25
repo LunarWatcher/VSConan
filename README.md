@@ -19,7 +19,44 @@ Note that `.vscode/c_cpp_configurations` **need to exist** for this script to wo
 
 ## Integration use
 
-It's not always desired to copy-paste the script. It also makes updates harder. 
+It's not always desired to copy-paste the script. It also makes updates harder. The init script can easily be implemented into any build script-based system, or a standard script. 
+
+Either way, you need a submodule:
+
+```
+git submodule add https://github.com/LunarWatcher/VSConan.git
+```
+
+### Python 
+
+Place the import statement where you want it. This should go **after** any of your config
+
+```python
+import VSConan.init
+```
+
+Alternatively:
+
+```python
+import os
+os.system("python VSConan/init.py")
+```
+
+
+
+### Anything that can interface with the command line
+
+Essentially, this approach uses `os.system` for your favorite language. Bash, batch, and those types of languages are pretty straight-forward with:
+
+```
+python VSConan/init.py
+```
+
+The exact syntax varies, but something along the lines of that. 
+
+Programming languages likely have their own classes that can execute that command. This also means you can add it to your build system, assuming you have one that supports scripting. 
+
+
 
 # How does it work?
 
