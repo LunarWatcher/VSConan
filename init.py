@@ -73,9 +73,12 @@ for include in includes:
     # That would make the authorName DEGoodmanWilson. 
     # This doesn't matter for the current use case. What the regex finds is the package name, which is right after the data. 
     match = re.search(r"data[\\/]+(.*?)[\\/]+", include)
-    # No match? Can't have that
+    # No match? Fall back to the secondary format
     if (match is None):
-        raise Exception("Failed to read name from \"" + include + "\"")
+        match = re.search(r".conan[\\/](?!data).*?[\\/]\d+[\\/](.*?)[\\/]", include)
+        # If the secondary format fails, the case isn't handled. Throw an exception.
+        if(match is None):
+            raise Exception("Failed to read name from \"" + include + "\". If this is a mistake, please open an issue in LunarWatcher/VSConan on GitHub")
     # Grab the group
     name = match.group(1)
     if(name is None or name.replace(" ", "") == ""):
