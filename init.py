@@ -16,7 +16,7 @@ def parseJson():
         content = "".join(f.readlines())
         # And parse it. List comprehension removes the -i part and gives a plain path. Not sure whether the system part is optional
         conan = [re.sub("(?i)-I(?:system)?", "", x) for x in json.loads(content)["includes"]]
-    if(!hasVsCode):
+    if(not hasVsCode):
         return conan
     # Next, the config is needed. In order to keep the includes linked in the file as well, they need to be added.
     # While it can be done manually, this script also does it. 
