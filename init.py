@@ -16,6 +16,8 @@ def parseJson():
         content = "".join(f.readlines())
         # And parse it. List comprehension removes the -i part and gives a plain path. Not sure whether the system part is optional
         conan = [re.sub("(?i)-I(?:system)?", "", x) for x in json.loads(content)["includes"]]
+    if(!hasVsCode):
+        return conan
     # Next, the config is needed. In order to keep the includes linked in the file as well, they need to be added.
     # While it can be done manually, this script also does it. 
     with open(".vscode/c_cpp_properties.json", "r") as f:
@@ -44,21 +46,29 @@ def handleIncludeInConfigFile(vsCodeConfig, include):
         if not match:
             vsIncludes.append("${workspaceFolder}/vsInclude/" + include)
         
+hasVsCode = True
 # Bookmark: Script
 if not os.path.exists(".vscode"):
-    raise Exception("Failed to find the .vscode folder")
+    print("### WARNING! ###")
+    print("Failed to find .vscode. No links will be made. Please create .vscode/c_cpp_properties.json to automatically link")
+    print("################")
+    hasVsCode = False
 
 # Grab the includes
 print("Grabbing dependencies and current configuration...")
-(includes, rawVsCodeConfig) = parseJson()
+if(hasVsCode):
+    (includes, rawVsCodeConfig) = parseJson()
+else:
+    includes = parseJson()
 
 if(includes is None or len(includes) == 0):
     raise Exception("Failed to read data, or data is empty. Make sure build/conan_ycm_flags.json exists and has content")
-if(rawVsCodeConfig is None or len(rawVsCodeConfig) == 0):
+if(hasVsCode and (rawVsCodeConfig is None or len(rawVsCodeConfig) == 0)):
     raise Exception("VS Code config file is empty. While this script can handle some issues for you, " +
         " You still have to have a minimal file. VS Code can also auto-generate the file.")
 
-vsCodeConfig = json.loads(rawVsCodeConfig)
+if(hasVsCode):
+    vsCodeConfig = json.loads(rawVsCodeConfig)
 
 # Create the directory
 if not os.path.exists("vsInclude"):
@@ -84,7 +94,8 @@ for include in includes:
     if(name is None or name.replace(" ", "") == ""):
         raise Exception("Name is empty for \"" + include + "\"")
     print("Found dependency: " + name)
-    handleIncludeInConfigFile(vsCodeConfig, name)
+    if hasVsCode:
+        handleIncludeInConfigFile(vsCodeConfig, name)
     if os.path.exists("vsInclude/" + name):
         currentLink = os.readlink("vsInclude/" + name);
         print(currentLink)
@@ -110,16 +121,17 @@ for include in includes:
     
 print("All config ready.")
 # Dump the updates
-vsCodeConfigStr = json.dumps(vsCodeConfig, indent=4)
-if (vsCodeConfigStr == rawVsCodeConfig):
-    # If no changes are made, save the disk and time. No need to write it. This is especially important for bigger files. 
-    print("No updates made to the VS config: All items present.")
-else:
-    if (len(vsCodeConfigStr) == 0):
-        raise Exception("ABORT EMPTY WRITE!")
+if hasVsCode:
+    vsCodeConfigStr = json.dumps(vsCodeConfig, indent=4)
+    if (vsCodeConfigStr == rawVsCodeConfig):
+        # If no changes are made, save the disk and time. No need to write it. This is especially important for bigger files. 
+        print("No updates made to the VS config: All items present.")
     else:
-        print("Saving config...")
-        # Otherwise, open and write the changes.
-        with open(".vscode/c_cpp_properties.json", "w") as f:
-            f.write(vsCodeConfigStr)
-        print("Successfully saved the update configuration.")
+        if (len(vsCodeConfigStr) == 0):
+            raise Exception("ABORT EMPTY WRITE!")
+        else:
+            print("Saving config...")
+            # Otherwise, open and write the changes.
+            with open(".vscode/c_cpp_properties.json", "w") as f:
+                f.write(vsCodeConfigStr)
+            print("Successfully saved the update configuration.")
